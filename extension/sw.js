@@ -3,6 +3,7 @@ const PULL_ALARM = "bobbysync.pull";
 const SETTINGS_KEY = "bobbysyncSettings";
 const DEFAULT_ROOT_ID = "1"; // Chrome bookmarks bar
 const CONFLICT_FOLDER_TITLE = "BobbySync Conflicts";
+const CAPTURE_FOLDER_TITLE = "BobbySync Captures";
 const ROOT_UID_OVERRIDES = {
   "1": "root-bookmarks-bar",
   "2": "root-other-bookmarks",
@@ -33,6 +34,7 @@ const state = {
   deviceId: null,
   bookmarkIndex: { localToUid: {}, uidToLocal: {} },
   conflictFolderLocalId: null,
+  captureFolderLocalId: null,
   pushInFlight: false,
   pullInFlight: false,
   replayDepth: 0,
@@ -158,6 +160,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   }
+  if (message.type === "capture-active-tab") {
+    ensureInit()
+      .then(() => captureActiveTab())
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
 });
 
 async function initialize() {
@@ -169,7 +178,8 @@ async function initialize() {
       "lastVersion",
       "bookmarkIndex",
       "deviceId",
-      "conflictFolderLocalId"
+      "conflictFolderLocalId",
+      "captureFolderLocalId"
     ])
   ]);
 
@@ -180,13 +190,15 @@ async function initialize() {
     localData.bookmarkIndex || { localToUid: {}, uidToLocal: {} };
   state.deviceId = localData.deviceId || crypto.randomUUID();
   state.conflictFolderLocalId = localData.conflictFolderLocalId || null;
+  state.captureFolderLocalId = localData.captureFolderLocalId || null;
 
   await chrome.storage.local.set({
     opQueue: state.opQueue,
     lastVersion: state.lastVersion,
     bookmarkIndex: state.bookmarkIndex,
     deviceId: state.deviceId,
-    conflictFolderLocalId: state.conflictFolderLocalId
+    conflictFolderLocalId: state.conflictFolderLocalId,
+    captureFolderLocalId: state.captureFolderLocalId
   });
 
   await bootstrapTree();
@@ -571,6 +583,43 @@ async function ensureConflictFolder() {
   state.conflictFolderLocalId = folder.id;
   await chrome.storage.local.set({ conflictFolderLocalId: folder.id });
   return folder.id;
+}
+
+async function ensureCaptureFolder() {
+  if (state.captureFolderLocalId) {
+    try {
+      const nodes = await chrome.bookmarks.get(state.captureFolderLocalId);
+      if (nodes?.length) return state.captureFolderLocalId;
+    } catch (_) {
+      // continue
+    }
+  }
+  const folder = await chrome.bookmarks.create({
+    parentId: DEFAULT_ROOT_ID,
+    title: CAPTURE_FOLDER_TITLE
+  });
+  state.captureFolderLocalId = folder.id;
+  await chrome.storage.local.set({ captureFolderLocalId: folder.id });
+  return folder.id;
+}
+
+async function captureActiveTab() {
+  await ensureInit();
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (!tab || !tab.url) {
+    throw new Error("找不到可抽取的当前页面");
+  }
+  if (!/^https?:/i.test(tab.url)) {
+    throw new Error("仅支持 HTTP/HTTPS 页面");
+  }
+  const folderId = await ensureCaptureFolder();
+  const title = (tab.title || "").trim() || tab.url;
+  await chrome.bookmarks.create({
+    parentId: folderId,
+    title,
+    url: tab.url
+  });
+  await pushOps();
 }
 
 function ensureUid(localId) {

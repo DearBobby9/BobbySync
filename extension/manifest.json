@@ -4,7 +4,7 @@
   "description": "Self-hosted bookmark sync via personal server",
   "version": "0.1.0",
   "minimum_chrome_version": "114",
-  "permissions": ["bookmarks", "storage", "alarms"],
+  "permissions": ["bookmarks", "storage", "alarms", "tabs"],
   "host_permissions": [
     "http://127.0.0.1:8080/*",
     "https://your-tunnel.example/*"

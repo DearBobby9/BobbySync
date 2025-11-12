@@ -56,6 +56,11 @@
       button.secondary {
         background: rgba(255, 255, 255, 0.12);
       }
+      button.block {
+        display: block;
+        width: 100%;
+        margin-top: 8px;
+      }
       .status-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -103,6 +108,7 @@
         <div style="margin-top:8px;">
           <button id="pushNow">立即 Push</button>
           <button id="pullNow" class="secondary">立即 Pull</button>
+          <button id="captureNow" class="block">抽取当前页面</button>
         </div>
         <div class="message" id="statusMessage"></div>
       </section>
@@ -148,7 +154,8 @@
         pullInterval: document.getElementById("pullInterval"),
         form: document.getElementById("settingsForm"),
         pushNow: document.getElementById("pushNow"),
-        pullNow: document.getElementById("pullNow")
+        pullNow: document.getElementById("pullNow"),
+        captureNow: document.getElementById("captureNow")
       };
 
       document.addEventListener("DOMContentLoaded", () => {
@@ -174,8 +181,14 @@
         paintMessage("配置已保存", "success");
       });
 
-      refs.pushNow.addEventListener("click", () => runManual("push-now"));
-      refs.pullNow.addEventListener("click", () => runManual("pull-now"));
+      refs.pushNow.addEventListener("click", () => runAction("push-now"));
+      refs.pullNow.addEventListener("click", () => runAction("pull-now"));
+      refs.captureNow.addEventListener("click", () =>
+        runAction("capture-active-tab", {
+          successMessage: "页面已加入队列",
+          refresh: true
+        })
+      );
 
       async function hydrateSettings() {
         const syncData = await chrome.storage.sync.get(SETTINGS_KEY);
@@ -199,13 +212,14 @@
         }
       }
 
-      async function runManual(type) {
+      async function runAction(type, options = {}) {
+        const { successMessage = "完成", refresh = true } = options;
         paintMessage("运行中…", "info");
         try {
           const response = await chrome.runtime.sendMessage({ type });
           if (!response?.ok) throw new Error(response?.error || "失败");
-          paintMessage("完成", "success");
-          refreshStatus();
+          paintMessage(successMessage, "success");
+          if (refresh) refreshStatus();
         } catch (err) {
           paintMessage(err.message, "error");
         }

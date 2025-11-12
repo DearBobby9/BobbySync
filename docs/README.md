@@ -53,11 +53,22 @@ scripts/dev-tunnel.sh --hostname your-tunnel.example
 
 Stop with `Ctrl+C` and the script will cleanly kill the Node server. Skip this section if you only need on-device sync.
 
+## Package the extension
+
+The extension folder is already production-ready; run:
+
+```bash
+npm run pack:extension
+```
+
+This produces `dist/bobbysync-extension.zip`, a self-contained MV3 bundle you can hand to friends or load on any Chrome-based browser without touching the source tree. Each run refreshes the archive, so re-run after editing `extension/*`.
+
 ## Load the extension
 
 1. Open `chrome://extensions` → enable *Developer mode* → *Load unpacked* → pick the `extension/` folder.
-2. Click the toolbar icon → fill in your API base (`https://your-tunnel.example/v1`) and optional bearer token in the popup.
-3. The popup can trigger manual push/pull and shows queue length, last applied version, and device ID.
+2. (Optional) run `npm run pack:extension` to produce `dist/bobbysync-extension.zip`, then import that zip via *Pack extension* / *Load unpacked* if you prefer a read-only copy.
+3. Click the toolbar icon →填上 API (`https://your-tunnel.example/v1`) 与可选 Token，保存后扩展会在下个周期应用。
+4. Popup 里的 `立即 Push` / `立即 Pull` / `抽取当前页面` 会立刻驱动对应的服务端交互，并展示队列、版本号和当前设备 ID。
 
 The background worker:
 
@@ -79,6 +90,12 @@ The background worker:
 3. Add/rename/move/delete bookmarks on Device A → watch the popup queue shrink after push.
 4. Load extension on Device B pointing at the same API, then trigger *Pull* manually once; Device B should recreate the ops within seconds.
 5. Disconnect Device A, make changes, reconnect → push should resume without duplicates because every op carries `opId` + `deviceId`.
+
+## Quick capture workflow
+
+1. 在需要同步的浏览器里打开想保存的页面，点 BobbySync 图标里的「抽取当前页面」。
+2. 扩展会把当前标签加入「BobbySync Captures」文件夹（自动创建），并立刻 Push 到服务器。
+3. 其他浏览器只需 Pull（或等自动轮询），马上就能看到同名书签；失败时可在 popup 查看错误提示并重新执行。
 
 ## Next steps
 

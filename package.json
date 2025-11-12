@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "dev:server": "node server/server.js",
-    "test:local": "node scripts/smoke-local.js"
+    "test:local": "node scripts/smoke-local.js",
+    "pack:extension": "scripts/pack-extension.sh"
   },
   "keywords": [
     "bookmarks",
