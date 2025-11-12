@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>BobbySync</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 0;
+        width: 320px;
+        background: #10151c;
+        color: #f4f7fb;
+      }
+      main {
+        padding: 16px;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+      section {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 12px;
+        background: rgba(255, 255, 255, 0.02);
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 8px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.2);
+        color: inherit;
+      }
+      button {
+        cursor: pointer;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: #3778ff;
+        color: #fff;
+        font-weight: 600;
+        margin-right: 6px;
+      }
+      button.secondary {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .status-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .status-grid span {
+        font-weight: 600;
+        display: block;
+        font-size: 14px;
+      }
+      .hint {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .message {
+        font-size: 12px;
+        margin-top: 8px;
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BobbySync</h1>
+      <section>
+        <div class="status-grid">
+          <div>
+            队列
+            <span id="queueSize">-</span>
+          </div>
+          <div>
+            版本
+            <span id="lastVersion">-</span>
+          </div>
+          <div>
+            设备 ID
+            <span id="deviceId">-</span>
+          </div>
+          <div>
+            API 状态
+            <span id="apiStatus">-</span>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <button id="pushNow">立即 Push</button>
+          <button id="pullNow" class="secondary">立即 Pull</button>
+        </div>
+        <div class="message" id="statusMessage"></div>
+      </section>
+
+      <section>
+        <form id="settingsForm">
+          <label for="apiBase">API 基址</label>
+          <input id="apiBase" name="apiBase" type="text" required />
+
+          <label for="authToken">Auth Token（可选）</label>
+          <input id="authToken" name="authToken" type="text" />
+
+          <label for="pushInterval">Push 间隔（分钟）</label>
+          <input id="pushInterval" name="pushInterval" type="number" min="1" />
+
+          <label for="pullInterval">Pull 间隔（分钟）</label>
+          <input id="pullInterval" name="pullInterval" type="number" min="1" />
+
+          <button type="submit">保存配置</button>
+        </form>
+        <p class="hint">保存后扩展将在下个周期应用新的 API/Token。</p>
+      </section>
+    </main>
+
+    <script>
+      const SETTINGS_KEY = "bobbysyncSettings";
+      const defaultSettings = {
+        apiBase: "http://127.0.0.1:8080/v1",
+        authToken: "",
+        pushIntervalMinutes: 1,
+        pullIntervalMinutes: 1
+      };
+
+      const refs = {
+        queueSize: document.getElementById("queueSize"),
+        lastVersion: document.getElementById("lastVersion"),
+        deviceId: document.getElementById("deviceId"),
+        apiStatus: document.getElementById("apiStatus"),
+        statusMessage: document.getElementById("statusMessage"),
+        apiBase: document.getElementById("apiBase"),
+        authToken: document.getElementById("authToken"),
+        pushInterval: document.getElementById("pushInterval"),
+        pullInterval: document.getElementById("pullInterval"),
+        form: document.getElementById("settingsForm"),
+        pushNow: document.getElementById("pushNow"),
+        pullNow: document.getElementById("pullNow")
+      };
+
+      document.addEventListener("DOMContentLoaded", () => {
+        hydrateSettings();
+        refreshStatus();
+      });
+
+      refs.form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const payload = {
+          apiBase: refs.apiBase.value.trim() || defaultSettings.apiBase,
+          authToken: refs.authToken.value.trim(),
+          pushIntervalMinutes: Math.max(
+            1,
+            Number(refs.pushInterval.value) || defaultSettings.pushIntervalMinutes
+          ),
+          pullIntervalMinutes: Math.max(
+            1,
+            Number(refs.pullInterval.value) || defaultSettings.pullIntervalMinutes
+          )
+        };
+        await chrome.storage.sync.set({ [SETTINGS_KEY]: payload });
+        paintMessage("配置已保存", "success");
+      });
+
+      refs.pushNow.addEventListener("click", () => runManual("push-now"));
+      refs.pullNow.addEventListener("click", () => runManual("pull-now"));
+
+      async function hydrateSettings() {
+        const syncData = await chrome.storage.sync.get(SETTINGS_KEY);
+        const settings = { ...defaultSettings, ...(syncData[SETTINGS_KEY] || {}) };
+        refs.apiBase.value = settings.apiBase;
+        refs.authToken.value = settings.authToken;
+        refs.pushInterval.value = settings.pushIntervalMinutes;
+        refs.pullInterval.value = settings.pullIntervalMinutes;
+      }
+
+      async function refreshStatus() {
+        try {
+          const response = await chrome.runtime.sendMessage({ type: "get-status" });
+          if (!response?.ok) throw new Error(response?.error || "无法获取状态");
+          refs.queueSize.textContent = response.status.queueSize;
+          refs.lastVersion.textContent = response.status.lastVersion;
+          refs.deviceId.textContent = response.status.deviceId;
+          refs.apiStatus.textContent = response.status.settings.apiBase;
+        } catch (err) {
+          paintMessage(err.message, "error");
+        }
+      }
+
+      async function runManual(type) {
+        paintMessage("运行中…", "info");
+        try {
+          const response = await chrome.runtime.sendMessage({ type });
+          if (!response?.ok) throw new Error(response?.error || "失败");
+          paintMessage("完成", "success");
+          refreshStatus();
+        } catch (err) {
+          paintMessage(err.message, "error");
+        }
+      }
+
+      function paintMessage(text, kind) {
+        refs.statusMessage.textContent = text;
+        refs.statusMessage.style.color =
+          kind === "error"
+            ? "#ff8e8e"
+            : kind === "success"
+            ? "#6bffb8"
+            : "rgba(255,255,255,0.8)";
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "BobbySync",
+  "description": "Self-hosted bookmark sync via personal server",
+  "version": "0.1.0",
+  "minimum_chrome_version": "114",
+  "permissions": ["bookmarks", "storage", "alarms"],
+  "host_permissions": [
+    "http://127.0.0.1:8080/*",
+    "https://your-tunnel.example/*"
+  ],
+  "background": {
+    "service_worker": "sw.js"
+  },
+  "action": {
+    "default_title": "BobbySync",
+    "default_popup": "popup.html"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "bobbysync",
+  "version": "0.1.0",
+  "description": "Self-hosted bookmark sync MVP (browser extension + local service)",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "dev:server": "node server/server.js",
+    "test:local": "node scripts/smoke-local.js"
+  },
+  "keywords": [
+    "bookmarks",
+    "sync",
+    "chrome-extension",
+    "self-hosted"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0"
+  }
+}
